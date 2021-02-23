@@ -33,17 +33,25 @@ mod connector {
         fn try_from(config: Config) -> Result<Self> {
             let mut builder = TlsConnector::builder();
             if let Some((pem, identity_password)) = config.identity.as_ref() {
+                eprintln!("HAS DEFAULT ID");
                 let identity = pkcs12_from_pem(pem, identity_password)?;
                 builder.identity(
                     Identity::from_pkcs12(&identity, identity_password)
-                        .map_err(|e| Error::SslError(format!("{}", e)))?,
+                        .map_err(|e| {
+                            eprintln!("42 {:?}", e);
+                            Error::SslError(format!("{}", e))
+                        })?,
                 );
             }
 
             if let Some(ders) = config.root_cert {
+                eprintln!("HAS ROOT CERT");
                 for der in ders {
                     builder.add_root_certificate(
-                        Certificate::from_der(&der).map_err(|e| Error::SslError(format!("{}", e)))?,
+                        Certificate::from_der(&der).map_err(|e| {
+                            eprintln!("51 {:?}", e);
+                            Error::SslError(format!("{}", e))
+                        })?,
                     );
                 }
             }
@@ -52,7 +60,10 @@ mod connector {
                 builder.danger_accept_invalid_certs(config.accept_invalid_certs);
             }
 
-            let connector = builder.build().map_err(|e| Error::SslError(format!("{}", e)))?;
+            let connector = builder.build().map_err(|e| {
+                eprintln!("62 {:?}", e);
+                Error::SslError(format!("{}", e))
+            })?;
             Ok(AsyncTlsConnector::from(connector))
         }
     }
@@ -110,7 +121,9 @@ mod connector {
                 let (key, certs) = {
                     let mut pem = Cursor::new(buf);
                     let certs = pemfile::certs(&mut pem)
-                        .map_err(|_| Error::SslError("No valid certificate was found".into()))?;
+                        .map_err(|e| {
+                            eprintln!("123 {:?}", e);
+                            Error::SslError("No valid certificate was found".into())})?;
                     pem.set_position(0);
 
                     let mut sk = pemfile::pkcs8_private_keys(&mut pem)
@@ -125,18 +138,24 @@ mod connector {
                             pem.set_position(0);
                             pemfile::rsa_private_keys(&mut pem)
                         })
-                        .map_err(|_| Error::SslError("No valid private key was found".into()))?;
+                        .map_err(|e| {
+                            eprintln!("140 {:?}", e);
+                            Error::SslError("No valid private key was found".into())})?;
 
                     if let (Some(sk), false) = (sk.pop(), certs.is_empty()) {
                         (sk, certs)
                     } else {
+                        println!("private key or certificate not found");
                         return Err(Error::SslError("private key or certificate not found".into()));
                     }
                 };
 
                 client_config
                     .set_single_client_cert(certs, key)
-                    .map_err(|e| Error::SslError(format!("{}", e)))?;
+                    .map_err(|e| {
+                        eprintln!("154 {:?}", e);
+                        Error::SslError(format!("{}", e))
+                    })?;
             }
 
             if let Some(ders) = config.root_cert {
@@ -144,7 +163,10 @@ mod connector {
                     client_config
                         .root_store
                         .add(&Certificate(der))
-                        .map_err(|e| Error::SslError(format!("{}", e)))?;
+                        .map_err(|e| {
+                            eprintln!("165 {:?}", e);
+                            Error::SslError(format!("{}", e))
+                        })?;
                 }
             }
 
